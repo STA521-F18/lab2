@@ -1,7 +1,7 @@
 ---
 title: "Lab2"
 author: "Merlise Clyde"
-date: "September 12, 2018"
+date: "September 17, 2018"
 ---
 
 ```{r setup, include=FALSE}
@@ -10,14 +10,95 @@ knitr::opts_chunk$set(echo =TRUE)
 
 ## Topics
 
-* `termplot`  Base R
+
 * `avPlots` from  `library(car)`  
 * `boxTidwell`  from  `library(car)`  
 * `boxCox`   from  `library(car)`  
+* `termplot`  Base R
+
+## Interpretation with Multiple Regression: Added Variable Plots
+
+* Regression Coefficients in Multiple Regression are adjusted for other variables
+
+* use the United Nations data 'full' model 
+
+
+$$E[\log(\text{Fertility}) \mid \log(\text{PPgdp}) = x_1, \text{Purban} = x_2) = \beta_0 + \beta_1 x_1 + \beta_2 x_2$$
+
+*  Keeping `Purban` fixed, with a one unit change in `log(PPgdp)` we expect `log(Fertility)` to change by $\beta_1$
+
+* Visualize with added-variable plots
+
+## Data and Cleaning
+```{r, echo=T}
+data(UN3, package="alr3")
+UN = dplyr::select(UN3, c(Fertility, PPgdp, Purban)) %>%
+  mutate(logPPgdp = log(PPgdp),
+         logFertility = log(Fertility)) %>%
+  na.omit()
+```
+
+## Scatter plots
+
+```{r}
+ggpairs(UN, c(3,4,5))
+```
+
+
+## Adjustment for `Purban`
+
+1) Regress `log(Fertility)` on `Purban` and obtain the residuals; call them `e_Y` for example. 
+
+```{r eY, echo=T}
+e_Y = residuals(lm(logFertility ~ Purban, data=UN))
+```
+
+2) Regress `logPPgdp` on `Purban` and obtain the residuals (call `e_X1`)
+```{r, echo=T}
+e_X1 = residuals(lm(logPPgdp ~ Purban, data=UN))
+```
+
+3) regress `e_Y` on `e_X` 
+
+4) slope is the same as the estimated slope for `logPPgdp` in the full model with both predictors.
+
+## Added Variable Plot
+
+```{r, echo=T, fig.width=5, fig.height=3}
+df = data.frame(e_Y = e_Y, e_X1 = e_X1)
+ggplot(data=df, aes(x = e_X1, y = e_Y)) + 
+  geom_point() +
+  geom_smooth(method = "lm", se = FALSE)
+```
+
+
+##  Compare
+
+```{r, echo=T}
+summary(lm(logFertility ~ logPPgdp + Purban, data=UN))$coef
+
+summary(lm(e_Y ~ e_X1, data=df))$coef
+```
+
+* coefficients are the same
+
+* residuals are the same
+
+* t-values not quite (why?)
+
+## In General `avPlots`
+
+```{r, echo=T}
+car::avPlots(lm(logFertility ~ logPPgdp + Purban, data=UN))
+```
 
 
 
-## Termplot Example
+
+
+
+
+## Added Variable Plot Example & Transformations
 
 ```{r simdata, echo=T}
 n = 100
@@ -27,6 +108,45 @@ x2 = abs(rnorm(n))
 logy = .5 + 3*logx1 - 2*sqrt(x2) + rnorm(n)
 simdat = data.frame(X1=x1, X2 = x2, Y=exp(logy))
 ```
+
+
+
+
+```{r}
+library(car)
+mod1 = lm(Y ~ X1 + X2, data=simdat)
+avPlots(mod1)
+```
+
+In the added variable plot,
+(like termplot below) this can also show if the linear term in $X1$ is appropriate or perhaps there is a nonlinear relationship or if there are outliers or influential points that affect the adjusted relationship. 
+
+
+
+## BoxTidwell
+
+```{r}
+data("Prestige")
+```
+
+```{r}
+pairs(Prestige)
+```
+
+
+```{r}
+boxTidwell(prestige ~ income + education, ~ type + poly(women, 2), data=Prestige)
+```
+
+
+## BoxCox
+
+```{r}
+boxCox(lm(prestige ~ income + education + type + poly(women, 2), data=Prestige))
+```
+
+see `help(boxCox)` for generalizations for non-positive responses
+
 
 ## Termplot output
 ```{r}
@@ -110,42 +230,22 @@ $$\log(Y) - (\bar{\log(Y)} + \hat{\beta}_1 (\log(X1) - \bar{\log(X1)})) =  \hat{
 
 * partial residual for X1  
 
-$$\hat{\beta}_1 (\log(X1) - \bar{\log(X1)})  + e$$
-## Added Variable Plots
+$$\hat{\beta}_1 (\log(X1) - \bar{\log(X1)}) + e$$
+(add back in term to residual to obtain partial residual)
 
-From `library(car)`
+## Summary
 
-```{r}
-library(car)
-mod1 = lm(Y ~ X1 + X2, data=simdat)
-avPlots(mod1)
-```
+* Linear predictors may be based on functions of other predictors
+(dummy variables, interactions, non-linear terms)
 
-In the added variable plot, on the left we regress $Y$ on $X2$ and find the residuals ($Y$ axis) and plot against the residuals from regressing $X1$ on $X2$ and plot those residuals on the $x$ axis.  If after removing the effect of $X2$ on both $Y$ and $X1$, $X1$ can explain the residual variation, then we should see a relationship in the plot.   The slope of the line in the added variable plot is the adjusted regression coefficient.  (See HW)
-Like termplot this can also show if the linear term in $X1$ is appropriate or perhaps there is a nonlinear relationship or if there are outliers or influential points that affect the adjusted relationship. 
+* need to change back to original units
 
+* log transform useful for non-negative responses (ensures predictions are non-negative)
 
-
-## BoxTidwell
-
-```{r}
-data("Prestige")
-```
-
-```{r}
-pairs(Prestige)
-```
-
-
-```{r}
-boxTidwell(prestige ~ income + education, ~ type + poly(women, 2), data=Prestige)
-```
-
-
-## BoxCox
-
-```{r}
-boxCox(lm(prestige ~ income + education + type + poly(women, 2), data=Prestige))
-```
-
-see `help(boxCox)` for generalizations for non-positive responses
+* Be careful of units of data 
+      +  plots should show units
+      +  summary statements should include units
+      
+* Goodness of fit measure: $R^2$ and Adjusted $R^2$  depend on scale   $R^2$ is percent variation in "$Y$" that is explained by the model
+$$  R^2 = 1 - SSE/SST$$
+where SST = $\sum_i (Y_i - \bar{Y})^2$
